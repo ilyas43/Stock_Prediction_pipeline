@@ -1,0 +1,10 @@
+# Use an existing Spark image as the base
+FROM bitnami/spark:latest
+
+# Copy your scripts into the container
+COPY . /opt/bitnami/spark/app
+
+RUN pip install -r /opt/bitnami/spark/app/requirements.txt
+
+# Set the command to run when the container starts
+CMD ["spark-submit", "--packages", "org.mongodb.spark:mongo-spark-connector_2.12:3.0.1", "--master", "local[*]", "/opt/bitnami/spark/app/app.py"]
