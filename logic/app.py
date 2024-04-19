@@ -1,7 +1,8 @@
 from pyspark.sql import SparkSession
-from logic.model.functions import clean_text
-from logic.model.functions import predict_sentiment
-from logic.model.functions import vecrtorize
+from model.functions import clean_text
+from model.functions import get_model
+from model.functions import get_vecrtor
+from pyspark.sql import Row
 # Initialize SparkSession
 spark = SparkSession.builder \
     .appName("MongoDB Integration") \
@@ -27,10 +28,10 @@ def get_news_data():
         # Append the symbol and corresponding new news to symbol_news_list
         symbol_news_list.append({'symbol': row['symbol'], 'new_news_list': new_news_list})
 
-    # Loop through the symbol_news_list and print symbol and its new news
-    for entry in symbol_news_list:
-        print("Symbol:", entry['symbol'])
-        print("News:", entry['new_news_list'])
+    # # Loop through the symbol_news_list and print symbol and its new news
+    # for entry in symbol_news_list:
+    #     print("Symbol:", entry['symbol'])
+    #     print("News:", entry['new_news_list'])
     
     # Stop SparkSession
     spark.stop()
@@ -44,8 +45,11 @@ def clean_and_analyse_text_sentiment():
     # Initialize an empty list to store cleaned news
     cleaned_news_list = []
     
+    v = get_vecrtor()
+    model = get_model()
+
     # Loop over each news list
-    for symbol_news in df.collect():
+    for symbol_news in get_news_data():
         symbol = symbol_news['symbol']
         new_news_list = symbol_news['new_news_list']
 
@@ -53,7 +57,10 @@ def clean_and_analyse_text_sentiment():
         cleaned_symbol_news_list = []
 
         # Loop over each news in the new_news_list
-        for news in new_news_list:
+        for row in new_news_list:
+
+            news = row.asDict()
+
             # Get the text of the news
             text = news['_TextNew']
             
@@ -61,19 +68,19 @@ def clean_and_analyse_text_sentiment():
             cleaned_text = clean_text(text)
 
             #vectorize the texts
-            vectorized_text = vecrtorize(cleaned_text)
+            vectorized_text = v.transform([cleaned_text])
 
             # give vectore of the text to the Nave bais model to get the sentiment prediction
-            sentiment = predict_sentiment(vectorized_text)
-            
+            predicted_sentiment = model.predict(vectorized_text.reshape(1, -1))
+            sentiment = "positive" if predicted_sentiment == 1 else "negative"
+
             # Create a new field named 'sentiment' and assign it the sentiment of the text predicted by NB
             news['sentiment'] = sentiment
 
-            # add some metrics to new dataset
-            
-            
+            updated_news = Row(**news)
+
             # Append the cleaned and analysed news to the cleaned_symbol_news_list
-            cleaned_symbol_news_list.append(news)
+            cleaned_symbol_news_list.append(updated_news)
 
         # Append the symbol and corresponding cleaned news to cleaned_news_list
         cleaned_news_list.append({'symbol': symbol, 'new_news_list': cleaned_symbol_news_list})
@@ -81,7 +88,7 @@ def clean_and_analyse_text_sentiment():
     return cleaned_news_list
 
 
-
+# print(clean_and_analyse_text_sentiment())
 
 
 # matching with prices , by symbol and date and create a dataset . in dataframe df

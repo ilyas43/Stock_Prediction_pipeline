@@ -1,47 +1,47 @@
+import joblib
+import pickle
+import nltk
 from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
 from nltk.stem import PorterStemmer
 from textblob import TextBlob
-from nltk.util import ngrams
-nltk.download('punkt')
-nltk.download('stopwords')
-import joblib
-import pickle
-import nltk
+nltk.data.path.append("/opt/bitnami/spark/app/model/nltk_data")
+# nltk.download('punkt', download_dir="/opt/bitnami/spark/app/model/nltk_data")
+# nltk.download('stopwords',download_dir="/opt/bitnami/spark/app/model/nltk_data")
 
+import os  # Import os module
+
+# Get the directory of the current script
+script_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Change the current working directory to the script's directory
+os.chdir(script_dir)
 
 
 # Function to vectorize the text data
 
-def vecrtorize(text):
+def get_vecrtor():
+  
   # Filepath of the saved vectorizer (same as before)
   vectorizer_file = "my_vectorizer.pkl"
 
   # Load the vectorizer from the pickle file
   with open(vectorizer_file, 'rb') as f:
       v = pickle.load(f)
-
   print("CountVectorizer loaded from:", vectorizer_file)
-
-  vectorised_text = v.transform([text])
-
-  return vectorised_text
+  return v
 
 
-def predict_sentiment(input):
+def get_model():
+
     # Load the saved Naive Bayes model
-    loaded_model = joblib.load('sentiment_model.pkl')
-
-    # Predict the sentiment of the example text data using the loaded model
-    predicted_sentiment = loaded_model.predict([input])
-
-    sentiment = "positive" if predict_sentiment == 1 else "negative"
-
-    # Print the predicted sentiment
-    return sentiment
+    loaded_model = joblib.load('sentiment_NB_model.pkl')
+    print("model loaded ")
+    return loaded_model
 
 # cleaning function
 def clean_text(text):
+    print("start cleaning text")
     # Tokenization
     tokens = word_tokenize(text)
     
