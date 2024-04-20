@@ -3,6 +3,7 @@ from model.functions import clean_text
 from model.functions import get_model
 from model.functions import get_vecrtor
 from pyspark.sql import Row
+from collections import defaultdict
 # Initialize SparkSession
 spark = SparkSession.builder \
     .appName("MongoDB Integration") \
@@ -88,7 +89,58 @@ def clean_and_analyse_text_sentiment():
     return cleaned_news_list
 
 
-# print(clean_and_analyse_text_sentiment())
+# agregate news based on date and symbol
+
+def calculate_bullish_indicators(cleaned_news_list):
+    final_dataset = []
+
+    for symbol_news in cleaned_news_list:
+        symbol = symbol_news['symbol']
+        symbol_news_list = symbol_news['new_news_list']
+
+        # Group news by date
+        grouped_by_date = defaultdict(lambda: {'Pp': 0, 'Pn': 0})
+
+        for news in symbol_news_list:
+            pub_date = news['_pubDate']
+            sentiment = news['sentiment']
+
+            # Increment positive or negative count based on sentiment
+            if sentiment == 'positive':
+                grouped_by_date[pub_date]['Pp'] += 1
+            else:
+                grouped_by_date[pub_date]['Pn'] += 1
+
+        # Calculate bullish indicators and sentiment for each date
+        for date, counts in grouped_by_date.items():
+            Pp = counts['Pp']
+            Pn = counts['Pn']
+
+            # Calculate bullish indicator
+            if Pp + Pn != 0:
+                bullish_indicator = (Pp - Pn) / (Pp + Pn)
+            else:
+                bullish_indicator = 0
+
+            # Determine sentiment
+            sentiment = "positive" if bullish_indicator > 0 else "negative"
+
+            # Create news sentiment object
+            news_sentiment = {
+                'pubDate': date,
+                'bullish_indicators': bullish_indicator,
+                'sentiment': sentiment,
+                'symbol': symbol
+            }
+
+            final_dataset.append(news_sentiment)
+
+    return final_dataset
+
+# Example usage:
+cleaned_news_list = clean_and_analyse_text_sentiment()
+final_dataset = calculate_bullish_indicators(cleaned_news_list)
+print(final_dataset)
 
 
 # matching with prices , by symbol and date and create a dataset . in dataframe df
