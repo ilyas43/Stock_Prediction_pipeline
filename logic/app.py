@@ -123,14 +123,22 @@ def calculate_bullish_indicators(cleaned_news_list):
                 bullish_indicator = 0
 
             # Determine sentiment
-            sentiment = "positive" if bullish_indicator > 0 else "negative"
+            sentiment = "positive" if bullish_indicator > 0 else "negative" if bullish_indicator < 0 else "neutral"
+
+            # calculate β∗t = βt * ln(1 + P°all/t)
+            # bullish_indicator_all =
+
+            # calculate agreement indicator : αt = 1 - V- 1-B°2t  
+            # calculate agreement_indicator = 
 
             # Create news sentiment object
             news_sentiment = {
                 'pubDate': date,
-                'bullish_indicators': bullish_indicator,
+                'βt': bullish_indicator,
                 'sentiment': sentiment,
                 'symbol': symbol
+                # 'β∗t': bullish_indicator_all,
+                # 'αt': agreement_indicator,
             }
 
             final_dataset.append(news_sentiment)
