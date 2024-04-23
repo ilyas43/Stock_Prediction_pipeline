@@ -34,7 +34,7 @@ def get_stock_data() -> dict :
 # transform timestamp to datetime
 def transform_data(record,symbol):
     utc_datetime = datetime.datetime.fromtimestamp(record['date'])
-    record['datetime_utc'] = utc_datetime.strftime("%Y, %m, %d, %H, %M")
+    record['datetime_utc'] = utc_datetime.strftime("%Y-%m-%d")
     record['symbol']=symbol
     return record
 
