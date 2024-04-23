@@ -5,7 +5,9 @@ from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
 from nltk.stem import PorterStemmer
 from textblob import TextBlob
+from pyspark.sql import SparkSession
 nltk.data.path.append("/opt/bitnami/spark/app/model/nltk_data")
+import pymongo
 # nltk.download('punkt', download_dir="/opt/bitnami/spark/app/model/nltk_data")
 # nltk.download('stopwords',download_dir="/opt/bitnami/spark/app/model/nltk_data")
 
@@ -67,3 +69,70 @@ def clean_text(text):
 
     # return tokens as one string
     return " ".join(tokens)
+
+from pyspark.sql import SparkSession
+
+def get_spark_session(database_name, collection_name):
+
+    # Create SparkSession with MongoDB integration
+    spark = SparkSession.builder \
+        .appName("MongoDB Integration") \
+        .config("spark.mongodb.input.uri", f"mongodb://host.docker.internal:27017/{database_name}.{collection_name}") \
+        .getOrCreate()
+
+    return spark
+
+def save_to_mongodb(final_dataset):
+    # Connect to MongoDB
+    client = pymongo.MongoClient("mongodb://host.docker.internal:27017/")
+
+    # Select database and collection
+    db = client["stock_data"]
+    collection = db["historical_dwh_news"]
+
+    # Insert final_dataset into the collection
+    collection.insert_many(final_dataset)
+
+    # Close the MongoDB connection
+    client.close()
+
+def update_is_new_flag(final_dataset):
+    # Connect to MongoDB
+    client = pymongo.MongoClient("mongodb://host.docker.internal:27017/")
+
+    # Select database and collection
+    db = client["stock_data"]
+    collection = db["historical_news"]
+
+    # Update records in the collection
+    for record in final_dataset:
+        pub_date = record['_pubDate']
+        symbol = record['symbol']
+        # Update documents where symbol matches and _pubDate is in listOfNews array
+        collection.update_many(
+            {'symbol': symbol, 'listOfNews._pubDate': pub_date},
+            {'$set': {'listOfNews.$[].is_new': 0}}
+        )
+
+    # Close the MongoDB connection
+    client.close()
+
+def update_is_matched_to_1(final_dataset):
+    # Connect to MongoDB
+    client = pymongo.MongoClient("mongodb://localhost:27017/")
+
+    # Select database and collection
+    db = client["stock_data"]
+    collection = db["historical_dwh_news"]
+
+    # Update records in the collection
+    for record in final_dataset:
+        pub_date = record['_pubDate']
+        symbol = record['symbol']
+        collection.update_one(
+            {'_pubDate': pub_date, 'symbol': symbol},
+            {'$set': {'is_matched': 1}}
+        )
+
+    # Close the MongoDB connection
+    client.close()
