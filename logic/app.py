@@ -259,6 +259,7 @@ def match_with_prices():
 
 # send the dataset to the database
 def Train_model(matched_dataset):
+    # use partial_fit
     return
 
 executed = ODS_TO_DWH_news()
