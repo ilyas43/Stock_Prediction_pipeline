@@ -3,7 +3,7 @@ import requests
 from bs4 import BeautifulSoup
 import hashlib
 from pymongo import MongoClient
-from params import SYMBOLS , URL , X_RAPIDAPI_KEY , X_RAPIDAPI_HOST, MONGO_HOST , MONGO_DB , MONGO_COLLECTION
+from params import SYMBOLS , URL , X_RAPIDAPI_KEY , X_RAPIDAPI_HOST, MONGO_HOST , MONGO_DB , MONGO_COLLECTION , SELECT_COUNT
 
 # get the list of news for each symbol
 def get_stockNews_data()->list:
@@ -17,7 +17,7 @@ def get_stockNews_data()->list:
 
     for symbol in SYMBOLS:
         listOfTtextNews = []
-        querystring = {"region":"US","snippetCount":"28","s":symbol}
+        querystring = {"region":"US","snippetCount":SELECT_COUNT,"s":symbol}
         res = requests.post(URL, data=payload, headers=headers, params=querystring)
         if res.status_code == 200:
             response = res.json()
