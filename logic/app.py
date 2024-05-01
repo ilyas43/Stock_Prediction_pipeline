@@ -3,21 +3,26 @@ this script runs at the same day as prediction script and before it
 """
 
 
-from pyspark.sql import SparkSession
+
 from model.functions import clean_text
 from model.functions import get_model
 from model.functions import get_vecrtor
 from model.functions import save_to_mongodb
 from model.functions import update_is_new_flag
 from model.functions import get_spark_session
+from model.functions import train_LSTM_model
+
+from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, to_date, date_add
 from pyspark.sql import Row
 from collections import defaultdict
 from datetime import datetime, date
+
 import csv
 import os
 import math
 import pymongo
+import shutil
 from params import MONGO_HOST , MONGO_DB , HISTORICAL_NEWS_COLLECTION , HISTORICAL_PRICES_COLLECTION , HISTORICAL_DWH_NEWS
 # Initialize SparkSession
 spark = get_spark_session(MONGO_DB,HISTORICAL_NEWS_COLLECTION)
@@ -179,7 +184,6 @@ def ODS_TO_DWH_news():
     else :
         return None
 
-
 # matching with prices , by symbol and date and create a dataset . in dataframe df
 def match_with_prices():
 
@@ -303,9 +307,41 @@ def store_dataset_to_csv(matched_dataset):
   print(f"Dataset successfully stored to CSV file: {csv_filename}")
 
 # send the dataset to the database
-def Train_model(matched_dataset):
-    # load data from dataset if it exist,  and read it and train the model ,  after training the model , copy this file to archive folder , and delete the dataset file 
-    # use partial_fit
+def Train_model():
+    """load data from dataset if it exist,  and read it and train the model ,  
+    after training the model , 
+    copy this file to archive folder , and delete the dataset file """
+
+    # Source and destination paths
+    file_path = f'data/input/{date.today().strftime("%Y-%m-%d")}.csv'
+    destination_path = 'data/archive'
+
+    # read file
+    # Read the content of the file
+    with open(file_path, 'r') as file:
+        file_content = file.read()
+
+    # copy it to archive
+    # Check if the source file exists
+    if os.path.exists(file_path):
+        # Copy the file to the destination folder
+        shutil.copy(file_path, destination_path)
+        print("File copied successfully.")
+    else:
+        print("Source file does not exist.")
+
+    # train model , use partial_fit
+    train_LSTM_model(file_content)
+    
+    # delete file from data/input
+    # Check if the file exists before attempting to delete it
+    if os.path.exists(file_path):
+        # Delete the file
+        os.remove(file_path)
+        print("File deleted successfully.")
+    else:
+        print("File does not exist.")
+
     return
 
 executed = ODS_TO_DWH_news()
@@ -314,5 +350,6 @@ if executed != None:
     # save the result to csv file in 'dataset'  folder if folder do not exist , create it , file name should be with date exemple 21_01_2024.csv 
     store_dataset_to_csv(matched_dataset)
     print('json format of dataset : ',matched_dataset)
+    Train_model()
 else:
     print("no data was arrived nor matched ! ")
