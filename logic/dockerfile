@@ -4,7 +4,19 @@ FROM bitnami/spark:latest
 # Copy your scripts into the container
 COPY . /opt/bitnami/spark/app
 
+# Change ownership of the /opt/bitnami/spark/app directory
+USER root
+RUN chown -R 1001:root /opt/bitnami/spark/app
+
+# Switch back to the non-root user
+USER 1001
+
+# Create the data directory and set permissions
+RUN mkdir -p /opt/bitnami/spark/app/data
+
 RUN pip install -r /opt/bitnami/spark/app/requirements.txt
+
+
 
 # Set the command to run when the container starts
 CMD ["spark-submit", "--packages", "org.mongodb.spark:mongo-spark-connector_2.12:3.0.1", "--master", "local[*]", "/opt/bitnami/spark/app/app.py"]
