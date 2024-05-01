@@ -2,7 +2,7 @@
 this script runs at the same day as prediction script and before it
 """
 
-import math
+
 from pyspark.sql import SparkSession
 from model.functions import clean_text
 from model.functions import get_model
@@ -13,7 +13,10 @@ from model.functions import get_spark_session
 from pyspark.sql.functions import col, to_date, date_add
 from pyspark.sql import Row
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, date
+import csv
+import os
+import math
 import pymongo
 from params import MONGO_HOST , MONGO_DB , HISTORICAL_NEWS_COLLECTION , HISTORICAL_PRICES_COLLECTION , HISTORICAL_DWH_NEWS
 # Initialize SparkSession
@@ -99,6 +102,11 @@ def clean_and_analyse_text_sentiment():
         # Append the symbol and corresponding cleaned news to cleaned_news_list
         cleaned_news_list.append({'symbol': symbol, 'new_news_list': cleaned_symbol_news_list})
 
+    # Get the directory of the current script
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+
+    # Change the current working directory to the script's directory
+    os.chdir(script_dir)
     return cleaned_news_list
 
 # agregate news based on date and symbol and calculate some metrics , and save the result to DWH
@@ -257,14 +265,54 @@ def match_with_prices():
     # Return matched dataset in JSON format
     return matched_json
 
+#save to csv
+def store_dataset_to_csv(matched_dataset):
+  """
+  Stores the JSON data in matched_dataset to a CSV file.
+
+  Args:
+      matched_dataset (list): A list of dictionaries containing news and prices.
+  """
+
+  # Get today's date and create folder name
+  today_str = date.today().strftime("%Y-%m-%d")
+  folder_name = f"data/input"
+
+  # Create the folder if it doesn't exist
+  os.makedirs(folder_name, exist_ok=True)
+
+  # Construct the CSV filename
+  csv_filename = os.path.join(folder_name, f"{today_str}.csv")
+
+  # Open the CSV file in write mode with UTF-8 encoding
+  with open(csv_filename, 'w', newline='', encoding='utf-8') as csvfile:
+    csv_writer = csv.writer(csvfile)
+
+    column_names = None  # Initialize as None to check if it's assigned
+
+    # Iterate through each dictionary in the list
+    for item in matched_dataset:
+      # Extract column names from the first dictionary
+      if column_names is None:
+        column_names = list(item.keys())  # Extract only once
+        csv_writer.writerow(column_names)  # Write header row
+
+      # Write a CSV row for each dictionary's values
+      csv_writer.writerow(item.values())
+
+  print(f"Dataset successfully stored to CSV file: {csv_filename}")
+
 # send the dataset to the database
 def Train_model(matched_dataset):
+    # load data from dataset if it exist,  and read it and train the model ,  after training the model , copy this file to archive folder , and delete the dataset file 
     # use partial_fit
     return
 
 executed = ODS_TO_DWH_news()
 if executed != None:
     matched_dataset = match_with_prices()
-    print(matched_dataset)
+    # save the result to csv file in 'dataset'  folder if folder do not exist , create it , file name should be with date exemple 21_01_2024.csv 
+    store_dataset_to_csv(matched_dataset)
+    print('json format of dataset : ',matched_dataset)
 else:
     print("no data was arrived nor matched ! ")
