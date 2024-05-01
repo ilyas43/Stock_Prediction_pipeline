@@ -316,11 +316,6 @@ def Train_model():
     file_path = f'data/input/{date.today().strftime("%Y-%m-%d")}.csv'
     destination_path = 'data/archive'
 
-    # read file
-    # Read the content of the file
-    with open(file_path, 'r') as file:
-        file_content = file.read()
-
     # copy it to archive
     # Check if the source file exists
     if os.path.exists(file_path):
@@ -329,6 +324,11 @@ def Train_model():
         print("File copied successfully.")
     else:
         print("Source file does not exist.")
+
+    # read file
+    # Read the content of the file
+    with open(file_path, 'r') as file:
+        file_content = file.read()
 
     # train model , use partial_fit
     train_LSTM_model(file_content)
