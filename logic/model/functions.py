@@ -136,3 +136,8 @@ def update_is_matched_to_1(final_dataset):
 
     # Close the MongoDB connection
     client.close()
+
+# train LSTM Model
+def train_LSTM_model(file_content):
+    
+    return
