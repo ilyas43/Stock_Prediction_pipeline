@@ -11,19 +11,24 @@ from model.functions import save_to_mongodb
 from model.functions import update_is_new_flag
 from model.functions import get_spark_session
 from model.functions import train_LSTM_model
+from model.functions import predict_LSTM_model
 
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, to_date, date_add
 from pyspark.sql import Row
 from collections import defaultdict
-from datetime import datetime, date
+from datetime import datetime, date , timedelta
+from pymongo import MongoClient
+import requests
+import yfinance as yf
 
 import csv
 import os
 import math
 import pymongo
 import shutil
-from params import MONGO_HOST , MONGO_DB , HISTORICAL_NEWS_COLLECTION , HISTORICAL_PRICES_COLLECTION , HISTORICAL_DWH_NEWS
+import pandas as pd
+from params import MONGO_HOST , MONGO_DB , HISTORICAL_NEWS_COLLECTION , HISTORICAL_PRICES_COLLECTION , HISTORICAL_DWH_NEWS ,SYMBOL
 # Initialize SparkSession
 spark = get_spark_session(MONGO_DB,HISTORICAL_NEWS_COLLECTION)
 
@@ -319,30 +324,73 @@ def Train_model():
     # copy it to archive
     # Check if the source file exists
     if os.path.exists(file_path):
+
+        # Read the CSV file
+        data = pd.read_csv(file_path)
+
+        # train model , use partial_fit
+        train_LSTM_model(data)
+
         # Copy the file to the destination folder
         shutil.copy(file_path, destination_path)
         print("File copied successfully.")
-    else:
-        print("Source file does not exist.")
-
-    # read file
-    # Read the content of the file
-    with open(file_path, 'r') as file:
-        file_content = file.read()
-
-    # train model , use partial_fit
-    train_LSTM_model(file_content)
-    
-    # delete file from data/input
-    # Check if the file exists before attempting to delete it
-    if os.path.exists(file_path):
-        # Delete the file
+        
         os.remove(file_path)
         print("File deleted successfully.")
     else:
-        print("File does not exist.")
+        print("Source file does not exist.")
 
-    return
+# Predire la resultat
+def Predict():
+    # Get yesterday's date
+    yesterday_date = (datetime.now() - timedelta(1)).strftime('%Y-%m-%d')
+
+    # Connect to MongoDB
+    client = MongoClient(MONGO_HOST)
+    db = client[MONGO_DB]
+    collection = db[HISTORICAL_DWH_NEWS]
+
+    for symbol in SYMBOL:
+        # Retrieve yesterday's news data for the current symbol
+        query = {
+            "symbol": symbol,
+            "_pubDate": yesterday_date
+        }
+        projection = {
+            "_id": 0,
+            "sentiment": 1,
+            "bullish_indicator": 1,
+            "bullish_indicator_all_posts": 1,
+            "agreement_indicator": 1,
+            "_pubDate": 1
+        }
+        yesterday_news = collection.find(query, projection)
+        news_df = pd.DataFrame(list(yesterday_news))
+
+        # If no data is found for the symbol, continue to the next one
+        if news_df.empty:
+            print(f"No data found for {symbol} on {yesterday_date}.")
+            continue
+
+        # Create a ticker object
+        ticker = yf.Ticker(symbol)
+
+        # Get historical data for today
+        today_data = ticker.history(period='1d')
+
+        # Extract the open price
+        open_price = today_data['Open'][0]
+
+        # Match data with today's open price and generate dataset features
+        news_df['open'] = open_price
+        news_df['sentiment'] = news_df['sentiment'].apply(lambda x: 1 if x == "positive" else 0)
+        features = news_df[["sentiment", "bullish_indicator", "bullish_indicator_all_posts", "agreement_indicator", "open"]]
+
+        # Predict
+        predictions = predict_LSTM_model(features)
+        print(f"Predictions for {symbol}: {predictions}")
+
+
 
 executed = ODS_TO_DWH_news()
 if executed != None:
@@ -351,5 +399,6 @@ if executed != None:
     store_dataset_to_csv(matched_dataset)
     print('json format of dataset : ',matched_dataset)
     Train_model()
+    Predict()
 else:
     print("no data was arrived nor matched ! ")

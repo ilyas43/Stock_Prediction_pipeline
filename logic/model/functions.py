@@ -8,6 +8,9 @@ from textblob import TextBlob
 from pyspark.sql import SparkSession
 nltk.data.path.append("/opt/bitnami/spark/app/model/nltk_data")
 import pymongo
+from tensorflow.keras.models import load_model
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.model_selection import train_test_split
 # nltk.download('punkt', download_dir="/opt/bitnami/spark/app/model/nltk_data")
 # nltk.download('stopwords',download_dir="/opt/bitnami/spark/app/model/nltk_data")
 
@@ -138,6 +141,58 @@ def update_is_matched_to_1(final_dataset):
     client.close()
 
 # train LSTM Model
-def train_LSTM_model(file_content):
+def train_LSTM_model(data):
+    # Convert "sentiment" column to binary (1 for positive, 0 for negative)
+    data["sentiment"] = data["sentiment"].apply(lambda x: 1 if x == "positive" else 0)
     
-    return
+    # Define features and target
+    features = ["sentiment", "bullish_indicator", "bullish_indicator_all_posts", "agreement_indicator", "open"]
+    target = ["high", "low", "close", "volume"]
+    
+    # Split features and target
+    X = data[features]
+    y = data[target]
+    
+    # Normalize features
+    scaler = MinMaxScaler()
+    X_scaled = scaler.fit_transform(X)
+    
+    # Reshape data for LSTM
+    X_train = X_scaled.reshape((X_scaled.shape[0], 1, X_scaled.shape[1]))
+    
+    # Load the model
+    try:
+        model = load_model("Lstm_model")
+    except Exception as e:
+        print(f"Error loading model: {e}")
+        return
+    
+    # Fit the model
+    model.fit(X_train, y, epochs=100, batch_size=1, verbose=1)
+    
+    # Save the model
+    model.save("Lstm_model")
+
+
+# Make prediction
+def predict_LSTM_model(features):
+
+    # Load the model
+    try:
+        loaded_model = load_model("Lstm_model")
+    except Exception as e:
+        print(f"Error loading model: {e}")
+        return
+
+    # Normalize features
+    scaler = MinMaxScaler()
+    features_scaled = scaler.fit_transform(features)
+
+    # Reshape the input data for LSTM
+    features_reshaped = features_scaled.reshape((features_scaled.shape[0], 1, features_scaled.shape[1]))
+
+    # Make prediction
+    loaded_predictions = loaded_model.predict(features_reshaped)
+
+    # Return the result
+    return loaded_predictions
