@@ -387,7 +387,7 @@ def Predict():
         features = news_df[["sentiment", "bullish_indicator", "bullish_indicator_all_posts", "agreement_indicator", "open"]]
 
         # Predict
-        predictions = predict_LSTM_model(features)
+        predictions = predict_LSTM_model(features)# pass symbol and news_df["_pubDate"]
         print(f"Predictions for {symbol}: {predictions}")
 
 
