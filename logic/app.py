@@ -345,8 +345,10 @@ def Train_model():
 
 # Predire la resultat
 def Predict():
+    tomorrow_predictions=[]
     # Get yesterday's date
     yesterday_date = (datetime.now() - timedelta(1)).strftime('%Y-%m-%d')
+    tomorrow_date = (datetime.now() - timedelta(1)).strftime('%Y-%m-%d')
 
     # Connect to MongoDB
     client = MongoClient(MONGO_HOST)
@@ -397,6 +399,8 @@ def Predict():
         print("Predicted low:", predictions[0][1])
         print("Predicted close:", predictions[0][2])
         print("Predicted volume:", predictions[0][3])
+        predection = {'high':predictions[0][0],'low':predictions[0][1],'close':predictions[0][2],'volume':predictions[0][3],'symbol':symbol,'date':tomorrow_date}
+        tomorrow_predictions.append(predection)
 
 
 executed = ODS_TO_DWH_news()
