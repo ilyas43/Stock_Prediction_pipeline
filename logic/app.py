@@ -348,7 +348,7 @@ def Predict():
     tomorrow_predictions=[]
     # Get yesterday's date
     yesterday_date = (datetime.now() - timedelta(1)).strftime('%Y-%m-%d')
-    tomorrow_date = (datetime.now() - timedelta(1)).strftime('%Y-%m-%d')
+    tomorrow_date = (datetime.now() + timedelta(1)).strftime('%Y-%m-%d')
 
     # Connect to MongoDB
     client = MongoClient(MONGO_HOST)
@@ -401,7 +401,43 @@ def Predict():
         print("Predicted volume:", predictions[0][3])
         predection = {'high':predictions[0][0],'low':predictions[0][1],'close':predictions[0][2],'volume':predictions[0][3],'symbol':symbol,'date':tomorrow_date}
         tomorrow_predictions.append(predection)
+    return tomorrow_predictions
 
+def send_to_influxDB(tomorrow_predictions):
+    import influxdb_client, os, time
+    from influxdb_client import InfluxDBClient, Point, WritePrecision
+    from influxdb_client.client.write_api import SYNCHRONOUS
+
+    token = "NXJSdPiQYRJQZc9fyIV9H-g-6jOzK5HeUDE-1Vg059jhCWiNrlzKzmYnVrlCEnbf9boWMRhS-IxrUYPq-GOZMQ=="
+    org = "esprims"
+    url = "http://host.docker.internal:8086"
+    bucket="predictions_dev"
+
+    
+    client = influxdb_client.InfluxDBClient(url=url, token=token, org=org)
+
+    write_api = client.write_api(write_options=SYNCHRONOUS)
+
+    print("tomorrow_predictions array to be looped in sent to influx db function :",tomorrow_predictions)
+
+    try:
+        # Write prediction data to InfluxDB
+        for pred in tomorrow_predictions:
+            print("Processing:", pred)
+            point = ( 
+            Point("stock_predictions")
+            .tag("symbol", pred["symbol"])                                          
+            .field("high", float(pred["high"]))
+            .field("low", float(pred["low"]))
+            .field("close", float(pred["close"]))
+            .field("volume", float(pred["volume"]))
+            .tag("date", pred["date"])
+            )
+            print("Writing point:", point)
+            write_api.write(bucket=bucket, org=org, record=point)
+        print("Data written to InfluxDB successfully.")
+    except Exception as e:
+        print("Error:", e)
 
 executed = ODS_TO_DWH_news()
 if executed != None:
@@ -410,6 +446,7 @@ if executed != None:
     store_dataset_to_csv(matched_dataset)
     print('json format of dataset : ',matched_dataset)
     Train_model()
-    Predict()
+    tomorrow_predictions = Predict()
+    send_to_influxDB(tomorrow_predictions)
 else:
     print("no data was arrived nor matched ! ")
