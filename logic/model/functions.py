@@ -8,7 +8,7 @@ from textblob import TextBlob
 from pyspark.sql import SparkSession
 nltk.data.path.append("/opt/bitnami/spark/app/model/nltk_data")
 import pymongo
-from tensorflow.keras.models import load_model
+from tensorflow.keras.models import load_model , model_from_json
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
 # nltk.download('punkt', download_dir="/opt/bitnami/spark/app/model/nltk_data")
@@ -142,6 +142,11 @@ def update_is_matched_to_1(final_dataset):
 
 # train LSTM Model
 def train_LSTM_model(data):
+    # Get the directory of the current script
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+
+    # Change the current working directory to the script's directory
+    os.chdir(script_dir)
     # Convert "sentiment" column to binary (1 for positive, 0 for negative)
     data["sentiment"] = data["sentiment"].apply(lambda x: 1 if x == "positive" else 0)
     
@@ -160,29 +165,50 @@ def train_LSTM_model(data):
     # Reshape data for LSTM
     X_train = X_scaled.reshape((X_scaled.shape[0], 1, X_scaled.shape[1]))
     
-    # Load the model
-    try:
-        model = load_model("Lstm_model")
-    except Exception as e:
-        print(f"Error loading model: {e}")
-        return
+    # load json and create model
+    json_file = open('model.json', 'r')
+    loaded_model_json = json_file.read()
+    json_file.close()
+    loaded_model = model_from_json(loaded_model_json)
+    # load weights into new model
+    loaded_model.load_weights("model.h5")
+    print("Loaded model from disk")
+        
+    # Compile the model before training
+    loaded_model.compile(optimizer='adam', loss='mean_squared_error')
     
     # Fit the model
-    model.fit(X_train, y, epochs=100, batch_size=1, verbose=1)
+    loaded_model.fit(X_train, y, epochs=100, batch_size=1, verbose=1)
     
     # Save the model
-    model.save("Lstm_model")
+    # serialize model to JSON
+    model_json = loaded_model.to_json()
+    with open("model.json", "w") as json_file:
+        json_file.write(model_json)
+    # serialize weights to HDF5
+    loaded_model.save_weights("model.h5")
+    print("Saved model to disk")
 
 
 # Make prediction
 def predict_LSTM_model(features):
+    # Get the directory of the current script
+    script_dir = os.path.dirname(os.path.abspath(__file__))
 
+    # Change the current working directory to the script's directory
+    os.chdir(script_dir)
     # Load the model
-    try:
-        loaded_model = load_model("Lstm_model")
-    except Exception as e:
-        print(f"Error loading model: {e}")
-        return
+    # load json and create model
+    json_file = open('model.json', 'r')
+    loaded_model_json = json_file.read()
+    json_file.close()
+    loaded_model = model_from_json(loaded_model_json)
+    # load weights into new model
+    loaded_model.load_weights("model.h5")
+    print("Loaded model from disk")
+
+    # Compile the model before training
+    loaded_model.compile(optimizer='adam', loss='mean_squared_error')
 
     # Normalize features
     scaler = MinMaxScaler()
@@ -193,6 +219,14 @@ def predict_LSTM_model(features):
 
     # Make prediction
     loaded_predictions = loaded_model.predict(features_reshaped)
+
+    # serialize model to JSON
+    model_json = loaded_model.to_json()
+    with open("model.json", "w") as json_file:
+        json_file.write(model_json)
+    # serialize weights to HDF5
+    loaded_model.save_weights("model.h5")
+    print("Saved model to disk")
 
     # Return the result
     return loaded_predictions

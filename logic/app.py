@@ -317,9 +317,12 @@ def Train_model():
     after training the model , 
     copy this file to archive folder , and delete the dataset file """
 
+    # Get the directory of the current script
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+
     # Source and destination paths
-    file_path = f'data/input/{date.today().strftime("%Y-%m-%d")}.csv'
-    destination_path = 'data/archive'
+    file_path = os.path.join(script_dir, 'data', 'input', f'{date.today().strftime("%Y-%m-%d")}.csv')
+    destination_path = os.path.join(script_dir, 'data', 'archive')
 
     # copy it to archive
     # Check if the source file exists
@@ -389,7 +392,11 @@ def Predict():
         # Predict
         predictions = predict_LSTM_model(features)# pass symbol and news_df["_pubDate"]
         print(f"Predictions for {symbol}: {predictions}")
-
+        # Display the predictions
+        print("Predicted high:", predictions[0][0])
+        print("Predicted low:", predictions[0][1])
+        print("Predicted close:", predictions[0][2])
+        print("Predicted volume:", predictions[0][3])
 
 
 executed = ODS_TO_DWH_news()
