@@ -11,19 +11,24 @@ from model.functions import save_to_mongodb
 from model.functions import update_is_new_flag
 from model.functions import get_spark_session
 from model.functions import train_LSTM_model
+from model.functions import predict_LSTM_model
 
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, to_date, date_add
 from pyspark.sql import Row
 from collections import defaultdict
-from datetime import datetime, date
+from datetime import datetime, date , timedelta
+from pymongo import MongoClient
+import requests
+import yfinance as yf
 
 import csv
 import os
 import math
 import pymongo
 import shutil
-from params import MONGO_HOST , MONGO_DB , HISTORICAL_NEWS_COLLECTION , HISTORICAL_PRICES_COLLECTION , HISTORICAL_DWH_NEWS
+import pandas as pd
+from params import MONGO_HOST , MONGO_DB , HISTORICAL_NEWS_COLLECTION , HISTORICAL_PRICES_COLLECTION , HISTORICAL_DWH_NEWS ,SYMBOL
 # Initialize SparkSession
 spark = get_spark_session(MONGO_DB,HISTORICAL_NEWS_COLLECTION)
 
@@ -312,37 +317,127 @@ def Train_model():
     after training the model , 
     copy this file to archive folder , and delete the dataset file """
 
+    # Get the directory of the current script
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+
     # Source and destination paths
-    file_path = f'data/input/{date.today().strftime("%Y-%m-%d")}.csv'
-    destination_path = 'data/archive'
+    file_path = os.path.join(script_dir, 'data', 'input', f'{date.today().strftime("%Y-%m-%d")}.csv')
+    destination_path = os.path.join(script_dir, 'data', 'archive')
 
     # copy it to archive
     # Check if the source file exists
     if os.path.exists(file_path):
+
+        # Read the CSV file
+        data = pd.read_csv(file_path)
+
+        # train model , use partial_fit
+        train_LSTM_model(data)
+
         # Copy the file to the destination folder
         shutil.copy(file_path, destination_path)
         print("File copied successfully.")
-    else:
-        print("Source file does not exist.")
-
-    # read file
-    # Read the content of the file
-    with open(file_path, 'r') as file:
-        file_content = file.read()
-
-    # train model , use partial_fit
-    train_LSTM_model(file_content)
-    
-    # delete file from data/input
-    # Check if the file exists before attempting to delete it
-    if os.path.exists(file_path):
-        # Delete the file
+        
         os.remove(file_path)
         print("File deleted successfully.")
     else:
-        print("File does not exist.")
+        print("Source file does not exist.")
 
-    return
+# Predire la resultat
+def Predict():
+    tomorrow_predictions=[]
+    # Get yesterday's date
+    yesterday_date = (datetime.now() - timedelta(1)).strftime('%Y-%m-%d')
+    tomorrow_date = (datetime.now() + timedelta(1)).strftime('%Y-%m-%d')
+
+    # Connect to MongoDB
+    client = MongoClient(MONGO_HOST)
+    db = client[MONGO_DB]
+    collection = db[HISTORICAL_DWH_NEWS]
+
+    for symbol in SYMBOL:
+        # Retrieve yesterday's news data for the current symbol
+        query = {
+            "symbol": symbol,
+            "_pubDate": yesterday_date
+        }
+        projection = {
+            "_id": 0,
+            "sentiment": 1,
+            "bullish_indicator": 1,
+            "bullish_indicator_all_posts": 1,
+            "agreement_indicator": 1,
+            "_pubDate": 1
+        }
+        yesterday_news = collection.find(query, projection)
+        news_df = pd.DataFrame(list(yesterday_news))
+
+        # If no data is found for the symbol, continue to the next one
+        if news_df.empty:
+            print(f"No data found for {symbol} on {yesterday_date}.")
+            continue
+
+        # Create a ticker object
+        ticker = yf.Ticker(symbol)
+
+        # Get historical data for today
+        today_data = ticker.history(period='1d')
+
+        # Extract the open price
+        open_price = today_data['Open'][0]
+
+        # Match data with today's open price and generate dataset features
+        news_df['open'] = open_price
+        news_df['sentiment'] = news_df['sentiment'].apply(lambda x: 1 if x == "positive" else 0)
+        features = news_df[["sentiment", "bullish_indicator", "bullish_indicator_all_posts", "agreement_indicator", "open"]]
+
+        # Predict
+        predictions = predict_LSTM_model(features)# pass symbol and news_df["_pubDate"]
+        print(f"Predictions for {symbol}: {predictions}")
+        # Display the predictions
+        print("Predicted high:", predictions[0][0])
+        print("Predicted low:", predictions[0][1])
+        print("Predicted close:", predictions[0][2])
+        print("Predicted volume:", predictions[0][3])
+        predection = {'high':predictions[0][0],'low':predictions[0][1],'close':predictions[0][2],'volume':predictions[0][3],'symbol':symbol,'date':tomorrow_date}
+        tomorrow_predictions.append(predection)
+    return tomorrow_predictions
+
+def send_to_influxDB(tomorrow_predictions):
+    import influxdb_client, os, time
+    from influxdb_client import InfluxDBClient, Point, WritePrecision
+    from influxdb_client.client.write_api import SYNCHRONOUS
+
+    token = "NXJSdPiQYRJQZc9fyIV9H-g-6jOzK5HeUDE-1Vg059jhCWiNrlzKzmYnVrlCEnbf9boWMRhS-IxrUYPq-GOZMQ=="
+    org = "esprims"
+    url = "http://host.docker.internal:8086"
+    bucket="predictions_dev"
+
+    
+    client = influxdb_client.InfluxDBClient(url=url, token=token, org=org)
+
+    write_api = client.write_api(write_options=SYNCHRONOUS)
+
+    print("tomorrow_predictions array to be looped in sent to influx db function :",tomorrow_predictions)
+
+    try:
+        # Write prediction data to InfluxDB
+        for pred in tomorrow_predictions:
+            print("Processing:", pred)
+            point = ( 
+            Point("stock_predictions")
+            .tag("symbol", pred["symbol"])                                          
+            .field("high", float(pred["high"]))
+            .field("low", float(pred["low"]))
+            .field("close", float(pred["close"]))
+            .field("volume", float(pred["volume"]))
+            .tag("date", pred["date"])
+            )
+            print("Writing point:", point)
+            write_api.write(bucket=bucket, org=org, record=point)
+        print("Data written to InfluxDB successfully.")
+    except Exception as e:
+        print("Error:", e)
 
 executed = ODS_TO_DWH_news()
 if executed != None:
@@ -351,5 +446,7 @@ if executed != None:
     store_dataset_to_csv(matched_dataset)
     print('json format of dataset : ',matched_dataset)
     Train_model()
+    tomorrow_predictions = Predict()
+    send_to_influxDB(tomorrow_predictions)
 else:
     print("no data was arrived nor matched ! ")
