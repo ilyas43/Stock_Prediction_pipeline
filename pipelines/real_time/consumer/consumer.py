@@ -4,43 +4,53 @@ from influxdb_client import InfluxDBClient, Point, WritePrecision
 from influxdb_client.client.write_api import SYNCHRONOUS
 from datetime import datetime, timezone
 
-# Kafka consumer configuration
-consumer = KafkaConsumer(
-    'stock_topic',
-    bootstrap_servers='kafka:9092',
-    auto_offset_reset='earliest',
-    enable_auto_commit=True,
-    group_id='my-group',
-    value_deserializer=lambda x: json.loads(x.decode('utf-8'))
-)
+def consume_data():
+    print("Configuring Kafka consumer...")
+    consumer = KafkaConsumer(
+        'stock_topic',
+        bootstrap_servers='kafka:9092',
+        auto_offset_reset='earliest',
+        enable_auto_commit=True,
+        group_id='my-group',
+        value_deserializer=lambda x: json.loads(x.decode('utf-8')),
+        consumer_timeout_ms=10000  # Example: Increase timeout to 10 seconds
+    )
 
-# InfluxDB client configuration
-token = "NXJSdPiQYRJQZc9fyIV9H-g-6jOzK5HeUDE-1Vg059jhCWiNrlzKzmYnVrlCEnbf9boWMRhS-IxrUYPq-GOZMQ=="
-org = "esprims"
-bucket = "stock_data"
-influxdb_url = "http://host.docker.internal:8086"
+    print("Configuring InfluxDB client...")
+    token = "NXJSdPiQYRJQZc9fyIV9H-g-6jOzK5HeUDE-1Vg059jhCWiNrlzKzmYnVrlCEnbf9boWMRhS-IxrUYPq-GOZMQ=="
+    org = "esprims"
+    bucket = "stock_data"
+    influxdb_url = "http://host.docker.internal:8086"
 
-client = InfluxDBClient(url=influxdb_url, token=token)
-write_api = client.write_api(write_options=SYNCHRONOUS)
+    client = InfluxDBClient(url=influxdb_url, token=token)
+    write_api = client.write_api(write_options=SYNCHRONOUS)
+    print("Kafka and InfluxDB clients configured.")
 
-# Consume messages from Kafka and write to InfluxDB
-for message in consumer:
-    data = message.value
-    for record in data:
-        symbol = record['s']
-        price = record['p']
-        timestamp = datetime.fromtimestamp(record['t'] / 1000, tz=timezone.utc)  # Convert to datetime with timezone
-        volume = record['v']
-        
-        # Create a point for InfluxDB
-        point = Point("stock_prices") \
-            .tag("symbol", symbol) \
-            .field("price", float(price)) \
-            .field("volume", volume) \
-            .time(timestamp, WritePrecision.MS)
-        
-        # Write the point to InfluxDB
-        write_api.write(bucket=bucket, org=org, record=point)
-        print(f"Written to InfluxDB: {point}")
+    print("Starting message consumption...")
+    for message in consumer:
+        print("Received a message.")
+        data = message.value
+        for record in data:
+            print("Processing record:", record)
+            symbol = record['s']
+            price = record['p']
+            timestamp = datetime.fromtimestamp(record['t'] / 1000, tz=timezone.utc)  # Convert to datetime with timezone
+            volume = record['v']
+            print(f"symbol: {symbol}, price: {price}")
 
-print("Finished consuming messages.")
+            # Create a point for InfluxDB
+            point = Point("stock_prices") \
+                .tag("symbol", symbol) \
+                .field("price", float(price)) \
+                .field("volume", volume) \
+                .time(timestamp, WritePrecision.MS)
+
+            # Write the point to InfluxDB
+            write_api.write(bucket=bucket, org=org, record=point)
+            print(f"Written to InfluxDB: {point}")
+
+    print("Finished consuming messages.")
+
+if __name__ == "__main__":
+    print("Starting consumer script.")
+    consume_data()
