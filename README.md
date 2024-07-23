@@ -1,6 +1,6 @@
 # Stock_Prediction_pipeline
 ## introduction
-A data engineering pipeline that ingests data from various sources in order to visualize the data , and train LSTM model to predict stock price
+A data engineering pipeline that ingests data from various sources in order to visualize the data , and train LSTM model to predict stock price based on sentiment analysis.
 ## details
 before you start , add params.py file to each pipieline folder that contains :
 SYMBOLS=
