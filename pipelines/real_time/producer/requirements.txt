@@ -1,0 +1,5 @@
+kafka-python==2.0.2
+yfinance==0.2.40
+confluent-kafka==2.4.0
+websocket-client==1.8.0
+

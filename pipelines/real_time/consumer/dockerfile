@@ -1,0 +1,19 @@
+FROM python:3.8-slim
+
+# Set the working directory
+WORKDIR /app
+
+# Copy the consumer code into the container
+COPY . .
+
+# Install the dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Install debugging utilities
+RUN apt-get update && apt-get install -y curl iputils-ping
+
+# Set environment variable to disable Python stdout buffering
+ENV PYTHONUNBUFFERED=1
+
+
+CMD ["python", "consumer.py"]
