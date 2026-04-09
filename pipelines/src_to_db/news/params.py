@@ -1,7 +1,7 @@
 SYMBOLS=["AAPL","AMZN"]
 URL = "https://apidojo-yahoo-finance-v1.p.rapidapi.com/news/v2/list"
-X_RAPIDAPI_KEY='30c9c6bb3fmshcf6fc376d8b240bp154afdjsn78b9b496d54f'
-X_RAPIDAPI_HOST='apidojo-yahoo-finance-v1.p.rapidapi.com'
+X_RAPIDAPI_KEY='.......................'
+X_RAPIDAPI_HOST='......................'
 
 SELECT_COUNT = "100"# number of records
 
